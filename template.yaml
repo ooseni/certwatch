@@ -1,0 +1,56 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: CertWatch - serverless SSL/TLS certificate expiry monitor
+
+Parameters:
+  Stage:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, prod]
+    Description: Deployment stage; each stage is its own stack (certwatch-dev, certwatch-prod)
+
+Globals:
+  Function:
+    Runtime: python3.14
+    Architectures: [x86_64]
+    MemorySize: 128
+    Timeout: 10
+    CodeUri: src/
+    Tracing: Active
+    LoggingConfig:
+      LogFormat: JSON
+    Environment:
+      Variables:
+        STAGE: !Ref Stage
+        SERVICE_NAME: certwatch
+
+Resources:
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      Description: CertWatch public API
+
+  HealthFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: GET /health - liveness check
+      Handler: certwatch.api.health.handler
+      Events:
+        Health:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /health
+            Method: GET
+
+  # Explicit log group so logs expire instead of accumulating (and costing) forever
+  HealthFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${HealthFunction}
+      RetentionInDays: 14
+
+Outputs:
+  ApiUrl:
+    Description: Base URL of the CertWatch API
+    Value: !Sub https://${HttpApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/
