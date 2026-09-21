@@ -1,19 +1,62 @@
+
 # =============================================================================
-# CertWatch-specific
+# Project-specific
 # =============================================================================
 # AWS SAM build output
 .aws-sam/
 # LocalStack local state
 .localstack/
-# Secrets and key material - never commit these (test certificates are generated at runtime)
+# JetBrains IDEs
+.idea/
+
+# --- Secrets, credentials and key material: never commit these ---
+# Environment files (commit a .env.example with placeholder values instead)
+.env
+.env.*
+!.env.example
+!.env.sample
+# Private keys and certificate bundles
 *.pem
 *.key
 *.p12
 *.pfx
-.env.*
-!.env.example
-# JetBrains IDEs
-.idea/
+*.jks
+*.keystore
+*.ppk
+# SSH keys (public .pub halves stay committable)
+id_rsa*
+id_dsa*
+id_ecdsa*
+id_ed25519*
+!*.pub
+# Cloud credentials (AWS console CSV downloads, GCP service-account and OAuth files, CLI configs)
+*accessKeys*.csv
+*credentials*.csv
+credentials.json
+client_secret*.json
+service-account*.json
+*-sa-key.json
+.aws/
+.azure/
+# Kubernetes configs
+kubeconfig
+*.kubeconfig
+.kube/
+# Terraform state and variable files (may hold secrets); commit *.tfvars.example instead
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+# Other credential stores
+.netrc
+.npmrc
+.pypirc
+.htpasswd
+secrets.*
+*.secret
+*.secrets
+.secrets/
 
 # =============================================================================
 # Python - github/gitignore: Python.gitignore
@@ -240,7 +283,7 @@ __marimo__/
 .streamlit/secrets.toml
 
 # =============================================================================
-# VS Code - github/gitignore: Global/VisualStudioCode.gitignore
+# Global/VisualStudioCode - github/gitignore: Global/VisualStudioCode.gitignore
 # =============================================================================
 # Visual Studio Code
 .vscode/*
@@ -255,7 +298,7 @@ __marimo__/
 *.vsix
 
 # =============================================================================
-# Windows - github/gitignore: Global/Windows.gitignore
+# Global/Windows - github/gitignore: Global/Windows.gitignore
 # =============================================================================
 # Windows thumbnail cache files
 Thumbs.db
@@ -283,7 +326,7 @@ $RECYCLE.BIN/
 *.lnk
 
 # =============================================================================
-# macOS - github/gitignore: Global/macOS.gitignore
+# Global/macOS - github/gitignore: Global/macOS.gitignore
 # =============================================================================
 # General
 .DS_Store
@@ -291,7 +334,7 @@ $RECYCLE.BIN/
 __MACOSX/
 .AppleDouble
 .LSOverride
-Icon[]
+Icon[]
 
 # Resource forks
 ._*
@@ -312,7 +355,7 @@ Icon[]
 .file
 .disk_label*
 lost+found
-.HFS+ Private Directory Data[]
+.HFS+ Private Directory Data[]
 
 # Directories potentially created on remote AFP share
 .AppleDB
@@ -344,7 +387,7 @@ MobileBackups.trash
 tmbootpicker.efi
 
 # =============================================================================
-# Linux - github/gitignore: Global/Linux.gitignore
+# Global/Linux - github/gitignore: Global/Linux.gitignore
 # =============================================================================
 *~
 
