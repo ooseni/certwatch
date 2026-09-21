@@ -1,0 +1,5 @@
+# Local development and CI tooling (not shipped to Lambda)
+pytest>=8
+ruff>=0.6
+cfn-lint>=1
+boto3>=1.35
