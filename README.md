@@ -77,6 +77,18 @@ curl -X POST "$API/domains" -H 'Content-Type: application/json' -d '{"domain": "
 - **Listing** returns `{"items": [...], "next_token": "..."}`; pass `next_token` back to get the next
   page (`limit` 1-100, default 50). Items come back in no particular order.
 
+## Testing
+
+| Suite | Tests | Runs on | Command |
+|-------|-------|---------|---------|
+| Static checks | ruff, cfn-lint, `sam validate` | local | `make lint validate` |
+| Unit | 100 | local, no Docker or network | `make test` |
+| Integration | 9 | LocalStack (HTTP API → Lambda → DynamoDB) | `make ls-up ls-deploy ls-test` |
+
+**Latest results** (phase 2, 2026-09-22): all checks pass; 100 unit and 9 integration tests passed; unit
+coverage 83%. The strategy, what each test covers and the results of every phase are in
+[docs/testing.md](docs/testing.md).
+
 ## Roadmap
 
 - [x] **Phase 1**: scaffold, `GET /health`, unit tests, linting
