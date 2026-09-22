@@ -29,6 +29,10 @@ Resources:
     Type: AWS::Serverless::HttpApi
     Properties:
       Description: CertWatch public API
+      # The API is unauthenticated until phase 6; throttling caps what anyone can do with it
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 20
+        ThrottlingRateLimit: 10
 
   HealthFunction:
     Type: AWS::Serverless::Function
@@ -50,7 +54,82 @@ Resources:
       LogGroupName: !Sub /aws/lambda/${HealthFunction}
       RetentionInDays: 14
 
+  # One item per monitored domain, keyed by the normalised name (see certwatch.validation)
+  DomainsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: domain
+          AttributeType: S
+      KeySchema:
+        - AttributeName: domain
+          KeyType: HASH
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+  DomainsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: /domains - register, list, read, update and remove monitored domains
+      Handler: certwatch.api.domains.handler
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref DomainsTable
+      Policies:
+        # Exactly the calls certwatch.store makes, on this table only
+        - Statement:
+            - Sid: DomainsTableReadWrite
+              Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:UpdateItem
+                - dynamodb:DeleteItem
+                - dynamodb:Scan
+              Resource: !GetAtt DomainsTable.Arn
+      Events:
+        CreateDomain:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /domains
+            Method: POST
+        ListDomains:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /domains
+            Method: GET
+        GetDomain:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /domains/{domain}
+            Method: GET
+        UpdateDomain:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /domains/{domain}
+            Method: PATCH
+        DeleteDomain:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /domains/{domain}
+            Method: DELETE
+
+  DomainsFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${DomainsFunction}
+      RetentionInDays: 14
+
 Outputs:
   ApiUrl:
     Description: Base URL of the CertWatch API
     Value: !Sub https://${HttpApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/
+  DomainsTableName:
+    Description: DynamoDB table holding the monitored domains
+    Value: !Ref DomainsTable
