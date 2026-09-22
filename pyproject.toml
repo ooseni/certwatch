@@ -7,6 +7,8 @@ requires-python = ">=3.14"
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+markers = ["integration: needs the stack deployed to LocalStack; run with `make ls-test`"]
+addopts = "-m 'not integration'"
 
 [tool.ruff]
 line-length = 110
@@ -17,4 +19,4 @@ target-version = "py314"
 select = ["E", "F", "I", "B", "UP", "S"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101"]  # plain asserts are the point of tests
+"tests/**" = ["S101", "S310"]  # plain asserts are the point of tests; urlopen only reaches LocalStack
