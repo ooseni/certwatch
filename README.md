@@ -25,27 +25,62 @@ The diagram source is [`docs/diagrams/certwatch.drawio`](docs/diagrams/certwatch
 
 ## Quick start
 
-Requirements: Python 3.14, AWS SAM CLI, Docker.
+Requirements: Python 3.14, AWS SAM CLI, Docker, and the LocalStack CLI for the integration tests.
 
 ```bash
-make test      # unit tests
+make test      # unit tests (no Docker, no network)
 make lint      # ruff + cfn-lint
-make local     # API on http://127.0.0.1:3000
-curl http://127.0.0.1:3000/health
+make local     # health endpoint on http://127.0.0.1:3000 via sam local
 ```
+
+### Run the whole stack locally on LocalStack
+
+```bash
+make ls-up       # start LocalStack
+make ls-deploy   # sam build + sam deploy to LocalStack; prints the API URL
+make ls-test     # integration tests: HTTP API -> Lambda -> DynamoDB
+make ls-destroy  # remove the stack (make ls-down stops LocalStack)
+```
+
+The `ls-*` targets use dummy credentials and an explicit LocalStack endpoint, so they cannot touch a real
+AWS account whatever your default profile is. LocalStack's free Hobby plan does not emulate HTTP APIs
+(API Gateway v2); the integration tests need a paid plan or its trial.
 
 Run `make help` for every target.
 
 ## API
 
-| Method | Path      | Description    |
-|--------|-----------|----------------|
-| GET    | `/health` | Liveness check |
+| Method   | Path                | Success | Description                                   |
+|----------|---------------------|---------|-----------------------------------------------|
+| `GET`    | `/health`           | 200     | Liveness check                                |
+| `POST`   | `/domains`          | 201     | Register a domain to monitor                  |
+| `GET`    | `/domains`          | 200     | List domains, paginated (`limit`, `next_token`) |
+| `GET`    | `/domains/{domain}` | 200     | Read one domain                               |
+| `PATCH`  | `/domains/{domain}` | 200     | Change `port` and/or `alert_days`             |
+| `DELETE` | `/domains/{domain}` | 204     | Stop monitoring a domain                      |
+
+```bash
+curl -X POST "$API/domains" -H 'Content-Type: application/json' -d '{"domain": "example.com", "alert_days": 14}'
+```
+```json
+{"domain": "example.com", "port": 443, "alert_days": 14,
+ "created_at": "2026-09-22T03:35:00+00:00", "updated_at": "2026-09-22T03:35:00+00:00"}
+```
+
+- **`domain`** is normalised to lower case and punycode (`Example.COM.` and `example.com` are the same
+  domain). Only public hostnames are accepted: no schemes, paths, ports, IP addresses or special-use names
+  such as `localhost` and `.internal`. The daily checker connects to these hosts, so this is also its first
+  defence against being pointed at internal addresses.
+- **`port`** defaults to 443; **`alert_days`** (how many days before expiry to alert) defaults to 30.
+- **Errors** always look like `{"error": {"code": "validation_error", "message": "..."}}`: `400` for invalid
+  input, `404` for an unknown domain, `409` if the domain is already registered.
+- **Listing** returns `{"items": [...], "next_token": "..."}`; pass `next_token` back to get the next
+  page (`limit` 1-100, default 50). Items come back in no particular order.
 
 ## Roadmap
 
 - [x] **Phase 1**: scaffold, `GET /health`, unit tests, linting
-- [ ] **Phase 2**: domain CRUD API on DynamoDB, integration tests on LocalStack
+- [x] **Phase 2**: domain CRUD API on DynamoDB, integration tests on LocalStack
 - [ ] **Phase 3**: scheduled certificate checks and SNS email alerts
 - [ ] **Phase 4**: deploy to AWS (`dev` stage), smoke tests
 - [ ] **Phase 5**: CI/CD with GitHub Actions and OIDC (no stored AWS keys)
