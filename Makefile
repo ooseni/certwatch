@@ -33,8 +33,8 @@ format: venv  ## Auto-format Python code
 	$(BIN)/ruff format src tests
 	$(BIN)/ruff check --fix src tests
 
-test: venv  ## Run unit tests
-	$(BIN)/pytest -q
+test: venv  ## Run unit tests with a coverage report
+	$(BIN)/pytest -q --cov=certwatch --cov-report=term-missing
 
 validate:  ## Validate the SAM template
 	sam validate --lint
