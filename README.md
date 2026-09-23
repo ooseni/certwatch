@@ -33,6 +33,14 @@ make lint      # ruff + cfn-lint
 make local     # health endpoint on http://127.0.0.1:3000 via sam local
 ```
 
+Install the git hooks once per clone. Every commit and push is then scanned for secrets (gitleaks) and
+checked for private keys, oversized files and merge-conflict markers:
+
+```bash
+pipx install pre-commit   # or: pip install pre-commit
+pre-commit install        # hooks for pre-commit and pre-push, from .pre-commit-config.yaml
+```
+
 ### Run the whole stack locally on LocalStack
 
 ```bash

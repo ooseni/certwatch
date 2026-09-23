@@ -7,6 +7,7 @@ How CertWatch is tested, what each suite proves, and the results of every phase.
 | Layer | Runs on | Proves | Command |
 |---|---|---|---|
 | **Static checks** | local (CI from phase 5) | Python style and common bugs, including bandit security rules (ruff); the SAM template is valid CloudFormation (cfn-lint, `sam validate`) | `make lint validate` |
+| **Secret scanning** | every commit and push (git hooks; CI from phase 5) | no credentials, private keys, oversized files or conflict markers get committed (gitleaks, pre-commit-hooks) | `pre-commit run --all-files` |
 | **Unit** | local, no Docker, no network | request validation, every route's status codes and error shapes, pagination tokens, response formatting | `make test` |
 | **Integration** | LocalStack in Docker | the deployed stack end to end: HTTP API → Lambda → DynamoDB, with the real template, IAM policy and routing | `make ls-up ls-deploy ls-test` |
 | **Smoke** (phase 4) | real AWS, `dev` stage | the same stack on AWS behaves as it does on LocalStack | planned |
@@ -62,6 +63,18 @@ actually tested.
 ## Results log
 
 Newest first. Each phase records the environment and every check that was run, including failures.
+
+### Tooling: secret-scanning git hooks (2026-09-23)
+
+Added `.pre-commit-config.yaml`: gitleaks v8.30.1 plus detect-private-key, check-added-large-files (1 MB)
+and check-merge-conflict from pre-commit-hooks v6.0.0, installed for pre-commit and pre-push.
+Environment: pre-commit 4.6.2, gitleaks 8.30.1, Ubuntu 26.04.1 LTS on WSL2.
+
+| Check | Result |
+|---|---|
+| `pre-commit run --all-files` (all four hooks, every tracked file) | pass |
+| `gitleaks git --redact` (full history, 15 commits) | no leaks found |
+| A fake GitHub token staged in a scratch repository | commit blocked, value redacted |
 
 ### Phase 2: domain CRUD API (2026-09-22)
 
