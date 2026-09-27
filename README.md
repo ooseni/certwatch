@@ -106,3 +106,7 @@ coverage 83%. The strategy, what each test covers and the results of every phase
 - [ ] **Phase 5**: CI/CD with GitHub Actions and OIDC (no stored AWS keys)
 - [ ] **Phase 6**: auth, least-privilege IAM, tracing, alarms, security scanning
 - [ ] **Phase 7**: docs, cost breakdown, design decisions
+
+## License
+
+Released under the [MIT License](LICENSE).
