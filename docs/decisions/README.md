@@ -2,6 +2,8 @@
 
 One record per decision, in the MADR format. Records are immutable once accepted: a changed decision gets a new record that supersedes the old one.
 
+The same seven decisions, with the context, target architecture and risks, are also presented as a 19-slide deck: [`certwatch-adr-blueprint.pdf`](certwatch-adr-blueprint.pdf).
+
 | ID | Decision | Status | Date |
 |---|---|---|---|
 | [ADR-0001](0001-define-the-infrastructure-with-aws-sam.md) | Define the infrastructure with AWS SAM | accepted | 2026-09-21 |
