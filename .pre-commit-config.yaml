@@ -16,4 +16,5 @@ repos:
       - id: detect-private-key
       - id: check-added-large-files
         args: [--maxkb=1024]
+        exclude: ^docs/decisions/.*\.pdf$   # the ADR deck (~1.4 MB); every other file keeps the 1 MB cap
       - id: check-merge-conflict
