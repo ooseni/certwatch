@@ -104,13 +104,13 @@ coverage 83%. The strategy, what each test covers and the results of every phase
 
 ## Roadmap
 
-- [x] **Phase 1**: scaffold, `GET /health`, unit tests, linting
-- [x] **Phase 2**: domain CRUD API on DynamoDB, integration tests on LocalStack
-- [ ] **Phase 3**: scheduled certificate checks and SNS email alerts
-- [ ] **Phase 4**: deploy to AWS (`dev` stage), smoke tests
-- [ ] **Phase 5**: CI/CD with GitHub Actions and OIDC (no stored AWS keys)
-- [ ] **Phase 6**: auth, least-privilege IAM, tracing, alarms, security scanning
-- [ ] **Phase 7**: docs, cost breakdown, design decisions
+- ✅ **Phase 1**: scaffold, `GET /health`, unit tests, linting
+- ✅ **Phase 2**: domain CRUD API on DynamoDB, integration tests on LocalStack
+- ⬜ **Phase 3**: scheduled certificate checks and SNS email alerts
+- ⬜ **Phase 4**: deploy to AWS (`dev` stage), smoke tests
+- ⬜ **Phase 5**: CI/CD with GitHub Actions and OIDC (no stored AWS keys)
+- ⬜ **Phase 6**: auth, least-privilege IAM, tracing, alarms, security scanning
+- ⬜ **Phase 7**: docs, cost breakdown, design decisions
 
 ## License
 
