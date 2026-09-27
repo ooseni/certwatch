@@ -23,6 +23,11 @@ with short-lived OIDC credentials instead of stored AWS keys:
 The diagram source is [`docs/diagrams/certwatch.drawio`](docs/diagrams/certwatch.drawio); open it in
 [draw.io](https://www.drawio.com) or the VS Code Draw.io Integration extension.
 
+Why it is built this way: each design choice is recorded as an architecture decision record in
+[`docs/decisions/`](docs/decisions/README.md). Four are accepted (AWS SAM, the HTTP API, DynamoDB on
+demand, testing against LocalStack) and three are proposed for phases 3 to 5 (the daily checker, the
+SSRF guard, and deployment through GitHub Actions with OIDC).
+
 ## Quick start
 
 Requirements: Python 3.14, AWS SAM CLI, Docker, and the LocalStack CLI for the integration tests.
