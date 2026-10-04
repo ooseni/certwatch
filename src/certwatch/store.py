@@ -63,6 +63,46 @@ class DomainStore:
         last = resp.get("LastEvaluatedKey")
         return items, encode_page_token(last) if last else None
 
+    def iter_all(self):
+        """Every registered domain, scanning page by page. For the daily check, not for the API."""
+        kwargs = {}
+        while True:
+            resp = self._table.scan(**kwargs)
+            for item in resp.get("Items", []):
+                yield _plain(item)
+            last = resp.get("LastEvaluatedKey")
+            if not last:
+                return
+            kwargs["ExclusiveStartKey"] = last
+
+    def record_check(self, domain: str, fields: dict) -> None:
+        """Store the result of a certificate check; a field set to None is removed from the item.
+
+        Field names come from certwatch.checker, never from a client. The write is conditional, so
+        a domain deleted while a run was in flight stays deleted instead of being recreated.
+        """
+        setters = {key: value for key, value in fields.items() if value is not None}
+        removals = [key for key, value in fields.items() if value is None]
+        expression = []
+        if setters:
+            expression.append("SET " + ", ".join(f"#{key} = :{key}" for key in setters))
+        if removals:
+            expression.append("REMOVE " + ", ".join(f"#{key}" for key in removals))
+        kwargs = {
+            "Key": {"domain": domain},
+            "UpdateExpression": " ".join(expression),
+            "ConditionExpression": "attribute_exists(#d)",
+            "ExpressionAttributeNames": {"#d": "domain"} | {f"#{key}": key for key in fields},
+        }
+        if setters:
+            kwargs["ExpressionAttributeValues"] = {f":{key}": value for key, value in setters.items()}
+        try:
+            self._table.update_item(**kwargs)
+        except ClientError as exc:
+            if _is_condition_failure(exc):
+                raise DomainNotFound(domain) from exc
+            raise
+
     def update(self, domain: str, changes: dict) -> dict:
         # field names come from certwatch.validation.parse_changes, never from the client directly
         names = {"#d": "domain", "#updated_at": "updated_at"} | {f"#{k}": k for k in changes}
