@@ -11,7 +11,7 @@ LS_ENV      := env -u AWS_PROFILE AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=t
 LS_OUTPUT    = $(LS_ENV) aws cloudformation describe-stacks --stack-name $(LS_STACK) \
                --query "Stacks[0].Outputs[?OutputKey=='$(1)'].OutputValue" --output text
 
-.PHONY: help venv lint format test validate build local invoke ls-up ls-down ls-deploy ls-test ls-destroy clean
+.PHONY: help venv lint format test validate build local invoke ls-up ls-down ls-deploy ls-test ls-check ls-destroy clean
 
 help:  ## Show available targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-10s %s\n", $$1, $$2}'
@@ -62,8 +62,16 @@ ls-deploy: build  ## Deploy the stack to LocalStack
 
 ls-test: venv  ## Run the integration tests against the LocalStack deployment
 	@url="$$($(call LS_OUTPUT,ApiUrl))"; table="$$($(call LS_OUTPUT,DomainsTableName))"; \
+	topic="$$($(call LS_OUTPUT,AlertsTopicArn))"; checker="$$($(call LS_OUTPUT,CheckerFunctionName))"; \
 	test -n "$$url" -a "$$url" != None || { echo "no $(LS_STACK) stack on LocalStack; run make ls-deploy"; exit 1; }; \
-	$(LS_ENV) CERTWATCH_API_URL="$$url" CERTWATCH_TABLE_NAME="$$table" $(BIN)/pytest -q -m integration
+	$(LS_ENV) CERTWATCH_API_URL="$$url" CERTWATCH_TABLE_NAME="$$table" \
+		CERTWATCH_TOPIC_ARN="$$topic" CERTWATCH_CHECKER_NAME="$$checker" $(BIN)/pytest -q -m integration
+
+ls-check:  ## Run the certificate check once on LocalStack and print its summary
+	@checker="$$($(call LS_OUTPUT,CheckerFunctionName))"; \
+	test -n "$$checker" -a "$$checker" != None || { echo "no $(LS_STACK) stack on LocalStack; run make ls-deploy"; exit 1; }; \
+	$(LS_ENV) aws lambda invoke --function-name "$$checker" --payload '{}' \
+		--cli-binary-format raw-in-base64-out /dev/stdout >/dev/null
 
 ls-destroy:  ## Delete the stack from LocalStack
 	$(LS_ENV) sam delete --stack-name $(LS_STACK) --no-prompts

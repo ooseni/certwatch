@@ -8,6 +8,27 @@ Parameters:
     Default: dev
     AllowedValues: [dev, prod]
     Description: Deployment stage; each stage is its own stack (certwatch-dev, certwatch-prod)
+  AlertEmail:
+    Type: String
+    Default: ""
+    AllowedPattern: ^$|^[^@\s]+@[^@\s]+\.[^@\s]+$
+    Description: >-
+      Address to email when a certificate needs attention. AWS sends it a confirmation link that must
+      be clicked before any alert arrives. Leave empty to subscribe later, by hand or per environment.
+  CheckSchedule:
+    Type: String
+    Default: cron(0 7 * * ? *)
+    Description: When to run the daily check, as an EventBridge Scheduler expression in UTC
+  CheckTimeoutSeconds:
+    Type: Number
+    Default: 5
+    MinValue: 1
+    MaxValue: 30
+    Description: How long the checker waits for one domain's TLS handshake before giving up on it
+
+Conditions:
+  # Without an address the topic is still created, so a subscription can be added later
+  HasAlertEmail: !Not [!Equals [!Ref AlertEmail, ""]]
 
 Globals:
   Function:
@@ -126,6 +147,166 @@ Resources:
       LogGroupName: !Sub /aws/lambda/${DomainsFunction}
       RetentionInDays: 14
 
+  # Certificate alerts and the checker's own alarms both go here, so one subscription covers both
+  AlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: !Sub CertWatch ${Stage}
+
+  AlertEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasAlertEmail
+    Properties:
+      TopicArn: !Ref AlertsTopic
+      Protocol: email
+      Endpoint: !Ref AlertEmail
+
+  # cryptography parses the certificates the checker reads: the standard library's ssl module only
+  # hands back a parsed certificate when the handshake verified it, and an expired certificate --
+  # precisely what CertWatch exists to report -- fails verification. A layer keeps it out of the two
+  # API functions, which do not parse certificates and start faster without 16 MB of it.
+  CertificateParsingLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: !Sub certwatch-${Stage}-certificate-parsing
+      Description: cryptography, for reading X.509 certificates
+      ContentUri: layers/certificate-parsing/
+      CompatibleRuntimes: [python3.14]
+      CompatibleArchitectures: [x86_64]
+      RetentionPolicy: Delete
+    Metadata:
+      BuildMethod: python3.14
+      BuildArchitecture: x86_64
+
+  CheckerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: Daily check - reads every registered domain's certificate and alerts through SNS
+      Handler: certwatch.checker.handler
+      Layers:
+        - !Ref CertificateParsingLayer
+      # Domains are checked one after another, so this needs far longer than an API request. The
+      # duration alarm below fires at 80% of this ceiling, long before a run is actually cut off.
+      Timeout: 900
+      MemorySize: 256
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref DomainsTable
+          ALERTS_TOPIC_ARN: !Ref AlertsTopic
+          CHECK_TIMEOUT_SECONDS: !Ref CheckTimeoutSeconds
+      Policies:
+        # Read every domain, write back each result, and publish the digest. Nothing else.
+        - Statement:
+            - Sid: DomainsTableScanAndRecordResults
+              Effect: Allow
+              Action:
+                - dynamodb:Scan
+                - dynamodb:UpdateItem
+              Resource: !GetAtt DomainsTable.Arn
+            - Sid: PublishAlerts
+              Effect: Allow
+              Action: sns:Publish
+              Resource: !Ref AlertsTopic
+
+  CheckerFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${CheckerFunction}
+      RetentionInDays: 14
+
+  # A run that cannot be delivered after its retries lands here instead of being lost silently
+  CheckerDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 1209600  # 14 days, the maximum
+      SqsManagedSseEnabled: true
+
+  CheckerScheduleRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Lets EventBridge Scheduler invoke the checker, and only the checker
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+            # Stops another account's schedule from borrowing this role (the confused deputy)
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+      Policies:
+        - PolicyName: invoke-checker
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt CheckerFunction.Arn
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt CheckerDeadLetterQueue.Arn
+
+  CheckerSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: !Sub certwatch-${Stage}-daily-check
+      Description: Runs the CertWatch certificate check once a day
+      ScheduleExpression: !Ref CheckSchedule
+      ScheduleExpressionTimezone: Etc/UTC
+      State: ENABLED
+      FlexibleTimeWindow:
+        Mode: "OFF"  # a daily expiry check gains nothing from being spread out
+      Target:
+        Arn: !GetAtt CheckerFunction.Arn
+        RoleArn: !GetAtt CheckerScheduleRole.Arn
+        RetryPolicy:
+          MaximumRetryAttempts: 2
+          MaximumEventAgeInSeconds: 3600
+        DeadLetterConfig:
+          Arn: !GetAtt CheckerDeadLetterQueue.Arn
+
+  # A failed run sends no alerts at all, so the failure itself has to be the alert
+  CheckerErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub certwatch-${Stage}-checker-errors
+      AlarmDescription: The daily certificate check failed, so that run alerted nobody
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref CheckerFunction
+      Statistic: Sum
+      Period: 3600
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching  # most hours have no run at all
+      AlarmActions:
+        - !Ref AlertsTopic
+
+  # 80% of the function's timeout: the point at which ADR-0005 says to fan the run out
+  CheckerDurationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub certwatch-${Stage}-checker-duration
+      AlarmDescription: A run is approaching the Lambda timeout; too many domains for one pass
+      Namespace: AWS/Lambda
+      MetricName: Duration
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref CheckerFunction
+      Statistic: Maximum
+      Period: 3600
+      EvaluationPeriods: 1
+      Threshold: 720000  # milliseconds
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlertsTopic
+
 Outputs:
   ApiUrl:
     Description: Base URL of the CertWatch API
@@ -133,3 +314,12 @@ Outputs:
   DomainsTableName:
     Description: DynamoDB table holding the monitored domains
     Value: !Ref DomainsTable
+  AlertsTopicArn:
+    Description: SNS topic that certificate alerts and checker alarms are published to
+    Value: !Ref AlertsTopic
+  CheckerFunctionName:
+    Description: Checker function, for running a check by hand with `aws lambda invoke`
+    Value: !Ref CheckerFunction
+  CheckerDeadLetterQueueUrl:
+    Description: Where undeliverable scheduled runs end up
+    Value: !Ref CheckerDeadLetterQueue
