@@ -1,0 +1,4 @@
+# Only the checker needs to parse X.509 certificates, so cryptography ships as a layer rather than
+# in every function's package: the API functions stay a few tens of kilobytes and start faster.
+# Its wheels are abi3 manylinux, so `sam build` installs them without a compiler.
+cryptography==50.0.2

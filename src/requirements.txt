@@ -1,2 +1,4 @@
 # Runtime dependencies bundled into the Lambda package by `sam build`.
 # boto3 is already provided by the Lambda Python runtime, so it is not listed here.
+# The checker's one dependency, cryptography, ships as a Lambda layer instead:
+# see layers/certificate-parsing/requirements.txt and CertificateParsingLayer in template.yaml.

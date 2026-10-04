@@ -4,3 +4,4 @@ pytest-cov>=6
 ruff>=0.6
 cfn-lint>=1
 boto3>=1.35
+cryptography==50.0.2  # same version the Lambda ships, so the tests exercise what runs
