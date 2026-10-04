@@ -78,3 +78,22 @@ Trade-offs accepted: a single run must finish inside Lambda's 15-minute limit; f
 Components: Amazon EventBridge Scheduler, AWS Lambda, Amazon SNS.
 Requirements addressed: REQ-01, REQ-05, REQ-06.
 Part of the CertWatch architecture decision record.
+
+### Review, 2026-10-04 (end of phase 3)
+
+The decision stands; phase 3 shipped on it unchanged. Both confirmation criteria are met: an
+integration test registers a host with an expired certificate and asserts the SNS publish
+(`test_an_expired_certificate_is_read_and_reported`), and `CheckerDurationAlarm` fires at
+720,000 ms against the function's 900 s timeout, which is the 80% the record asked for.
+`CheckerErrorsAlarm` covers the failed-run case. The schedule carries two retries and a
+dead-letter queue, as the option promised.
+
+One clarification, recorded because the text above is narrower than what was built: the record
+says certificates "inside their alert window" are published. The checker in fact alerts on every
+result that is not `ok`, which also covers `check_failed`, `blocked`, `unresolvable`,
+`unreachable` and `handshake_failed`. A domain that cannot be checked is worth the same email as
+one about to expire, and a silent failure would defeat the service. Each run still sends at most
+one digest. The statuses are documented in the README.
+
+The alternative trigger, one run passing 5 minutes, has not occurred; the duration alarm is the
+standing guard for it.

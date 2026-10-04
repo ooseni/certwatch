@@ -71,3 +71,18 @@ Trade-offs accepted: hosts that resolve to private addresses are skipped and log
 Components: AWS Lambda.
 Requirements addressed: REQ-02.
 Part of the CertWatch architecture decision record.
+
+### Review, 2026-10-04 (end of phase 3)
+
+The decision stands; both layers are in place. The confirmation criteria are met in full: unit
+tests prove names resolving to 127.0.0.1, 10.0.0.0/8, 169.254.169.254 and ::1 are refused,
+a rebinding case (one public and one private answer for the same name) is refused as a whole,
+and the 66 registration-validation tests still pass.
+
+The guard went slightly wider than the record describes, which is worth noting rather than
+changing: it rejects on `is_global`, so IPv4-mapped IPv6, 6to4 and carrier-grade NAT ranges are
+refused as well as the private, loopback, link-local and multicast ranges named above. Those
+forms wrap an internal address in a shape a prefix blocklist tends to miss.
+
+The accepted trade-off held: no legitimate domain was blocked during phase 3, and hosts that
+resolve inward are skipped with a logged reason and reported in the digest.
