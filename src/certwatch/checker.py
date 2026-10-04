@@ -57,7 +57,7 @@ def check_domain(item: dict, timeout: float, now: datetime) -> dict:
     return base | {
         "status": status,
         "days_remaining": days_remaining,
-        "detail": _expiry_detail(status, certificate["expires_at"], days_remaining, alert_days),
+        "detail": _expiry_detail(status, certificate, days_remaining, alert_days),
         "certificate": certificate,
     }
 
@@ -153,11 +153,16 @@ def _severity(result: dict) -> tuple[int, object]:
     return _SEVERITY.get(status, 3), result.get("days_remaining", 0), result["domain"]
 
 
-def _expiry_detail(status: str, expires_at: str, days_remaining: int, alert_days: int) -> str:
+def _expiry_detail(status: str, certificate: dict, days_remaining: int, alert_days: int) -> str:
+    expires_at = certificate["expires_at"]
     if status == certs.EXPIRED:
         return f"expired on {expires_at} ({abs(days_remaining)} day(s) ago)"
     if status == certs.NOT_YET_VALID:
-        return f"not valid until after {expires_at}; the certificate's start date is in the future"
+        # the date that matters here is when it starts working, not when it expires
+        return (
+            f"not valid until {certificate['starts_at']}; "
+            f"the certificate's start date is in the future (expires {expires_at})"
+        )
     window = f", alert window {alert_days} day(s)" if status == certs.EXPIRING else ""
     return f"expires on {expires_at} ({days_remaining} day(s) left{window})"
 

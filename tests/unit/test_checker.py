@@ -279,12 +279,17 @@ def test_the_subject_is_a_single_line_within_the_sns_limit():
 
 
 def test_a_not_yet_valid_certificate_is_explained(monkeypatch, notifier):
-    inspector(monkeypatch, {"early.example.com": certificate(90, starts_in_days=3)})
+    cert = certificate(90, starts_in_days=3)
+    inspector(monkeypatch, {"early.example.com": cert})
 
     run(FakeStore([{"domain": "early.example.com"}]), notifier)
 
-    assert "NOT_YET_VALID" in notifier.sent[0][1]
-    assert "start date is in the future" in notifier.sent[0][1]
+    body = notifier.sent[0][1]
+    assert "NOT_YET_VALID" in body
+    assert "start date is in the future" in body
+    # the date it becomes valid, not the date it expires
+    assert f"not valid until {cert['starts_at']}" in body
+    assert f"not valid until {cert['expires_at']}" not in body
 
 
 def test_the_handler_reads_its_settings_from_the_environment(monkeypatch):
