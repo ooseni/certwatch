@@ -1,0 +1,23 @@
+# Deploy configuration for the dev stage on real AWS. One stack per stage, named
+# certwatch-<stage>. LocalStack is not configured here; `make ls-deploy` owns that path.
+#
+#   PATH="$PWD/.venv/bin:$PATH" sam build --config-env dev   # sam needs a python3.14 with pip
+#   sam deploy --config-env dev --parameter-overrides 'Stage="dev" AlertEmail="you@example.com"'
+version = 0.1
+
+[dev.global.parameters]
+stack_name = "certwatch-dev"
+region = "us-east-1"
+
+[dev.build.parameters]
+cached = true
+parallel = true
+
+[dev.deploy.parameters]
+capabilities = "CAPABILITY_IAM"
+resolve_s3 = true
+confirm_changeset = true
+fail_on_empty_changeset = false
+# AlertEmail is deliberately absent: this file is public, so a value here would publish the
+# address. Pass it on the command line at deploy time instead, as the header shows.
+parameter_overrides = 'Stage="dev"'
